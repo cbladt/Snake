@@ -7,6 +7,23 @@
 #include <vector>
 #include <map>
 
+class GameOver :
+        public std::exception
+{
+public:
+    GameOver(std::string what) :
+        _what(what)
+    {}
+
+    const char* what() const noexcept final override
+    {
+        return _what.c_str();
+    }
+
+private:
+    std::string _what;
+};
+
 auto GetTimeMs()
 {
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
@@ -22,7 +39,8 @@ public:
     Snake() :
         _currentDirection(Direction::North),
         _lastTickMs(GetTimeMs()),
-        _tickCount(0)
+        _tickCount(0),
+        _run(true)
     {
         sAppName = "Snake";
 
@@ -36,22 +54,25 @@ public:
 
     bool OnUserCreate() final override
     {
-        SetBackground(olc::BLACK);
+        SetBackground(olc::BLACK);        
         CreateInitialSnake();
         return true;
     }
 
     bool OnUserUpdate(float) final override
     {
-        auto now = GetTimeMs();
-        if (now - _lastTickMs > 100)
+        try
         {
-            Tick();
-            _lastTickMs = now;
-            _tickCount++;
+            if (_run)
+            {
+                DoOnUserUpdate();
+            }
         }
-
-        HandleInput();
+        catch (GameOver&)
+        {
+            _run = false;
+            DrawTheSnake(true);
+        }
 
         return true;
     }
@@ -69,6 +90,20 @@ private:
     Direction _currentDirection;
     size_t _lastTickMs;
     size_t _tickCount;
+    bool _run;
+
+    void DoOnUserUpdate()
+    {
+        auto now = GetTimeMs();
+        if (now - _lastTickMs > 100)
+        {
+            Tick();
+            _lastTickMs = now;
+            _tickCount++;
+        }
+
+        HandleInput();
+    }
 
     template <typename T>
     void MoveNorth(T& x)
@@ -100,13 +135,47 @@ private:
         for (int x = 0; x < ScreenWidth(); x++)
         {
             for (int y = 0; y < ScreenHeight(); y++)
-            {
-                Draw(x, y, t);
+            {                
+                if (IsBorder(x, y))
+                {
+                    Draw(x, y, olc::GREY);
+                }
+
+                else
+                {
+                    Draw(x, y, t);
+                }
             }
-        }
+        }       
     }
 
-    void HandleInput()
+    template <typename T>
+    bool IsBorder(T x, T y)
+    {
+        if (x == 0)
+        {
+            return true;
+        }
+
+        else if (x == ScreenWidth() - 1)
+        {
+            return true;
+        }
+
+        else if (y == 0)
+        {
+            return true;
+        }
+
+        else if (y == ScreenHeight() - 1)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    constexpr void HandleInput()
     {
         if (GetKey(olc::Key::UP).bReleased)
         {
@@ -129,7 +198,7 @@ private:
         }
     }
 
-    void Tick()
+    constexpr void Tick()
     {
         FollowTheSnakeHead();
         MoveTheSnakeHead();
@@ -151,7 +220,7 @@ private:
         _snake.push_back(std::make_pair(_snake.back().first, _snake.back().second+1));
     }
 
-    void AppendTheSnake()
+    constexpr void AppendTheSnake()
     {
         auto last = _snake.back();
 
@@ -166,11 +235,11 @@ private:
         _snake.push_back(last);
     }
 
-    void DrawTheSnake()
+    constexpr void DrawTheSnake(bool dead = false)
     {
         for (size_t n = 0; n < _snake.size(); n++)
-        {
-            auto color = olc::GREEN;
+        {            
+            auto color = dead ? olc::RED : olc::GREEN;
 
             if (n == 0)
             {
@@ -182,7 +251,7 @@ private:
         }
     }
 
-    void MoveTheSnakeHead()
+    constexpr void MoveTheSnakeHead()
     {
         auto& head = _snake.front();
 
@@ -193,9 +262,31 @@ private:
             case Direction::South: MoveSouth(head.second); break;
             case Direction::West:  MoveWest(head.first); break;
         }
+
+        CheckCollosion();
     }
 
-    void FollowTheSnakeHead()
+    constexpr void CheckCollosion()
+    {
+        auto& head = _snake.front();
+
+        for (size_t n = 1; n < _snake.size(); n++)
+        {
+            auto& c = _snake.at(n);
+
+            if ((c.first == head.first) && (c.second == head.second))
+            {
+                throw GameOver("Collision");
+            }
+
+            if (IsBorder(head.first, head.second))
+            {
+                throw GameOver("Collision");
+            }
+        }
+    }
+
+    constexpr void FollowTheSnakeHead()
     {
         Coordinates last = {0,0};
 
