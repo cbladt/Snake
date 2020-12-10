@@ -24,6 +24,8 @@ private:
     std::string _what;
 };
 
+constexpr static const auto Dead = true;
+
 auto GetTimeMs()
 {
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
@@ -71,7 +73,7 @@ public:
         catch (GameOver&)
         {
             _run = false;
-            DrawTheSnake(true);
+            DrawTheSnake(Dead);
         }
 
         return true;
@@ -87,6 +89,8 @@ private:
     };
 
     std::vector<Coordinates> _snake;
+    std::vector<Coordinates> _goodObstacles;
+    std::vector<Coordinates> _badObstacles;
     Direction _currentDirection;
     size_t _lastTickMs;
     size_t _tickCount;
@@ -95,7 +99,7 @@ private:
     void DoOnUserUpdate()
     {
         auto now = GetTimeMs();
-        if (now - _lastTickMs > 100)
+        if (now - _lastTickMs > 50)
         {
             Tick();
             _lastTickMs = now;
@@ -179,22 +183,22 @@ private:
     {
         if (GetKey(olc::Key::UP).bReleased)
         {
-            _currentDirection = Direction::North;
+            _currentDirection = Direction::North;            
         }
 
         if (GetKey(olc::Key::RIGHT).bReleased)
         {
-            _currentDirection = Direction::East;
+            _currentDirection = Direction::East;            
         }
 
         if (GetKey(olc::Key::DOWN).bReleased)
         {
-            _currentDirection = Direction::South;
+            _currentDirection = Direction::South;            
         }
 
         if (GetKey(olc::Key::LEFT).bReleased)
         {
-            _currentDirection = Direction::West;
+            _currentDirection = Direction::West;            
         }
     }
 
@@ -203,11 +207,17 @@ private:
         FollowTheSnakeHead();
         MoveTheSnakeHead();
         SetBackground(olc::BLACK);
+        DrawTheObstacles();
         DrawTheSnake();
 
         if (_tickCount % 10 == 0)
         {
             AppendTheSnake();
+        }
+
+        if (_tickCount % 30 == 0)
+        {
+            CreateObstacle();
         }
     }
 
@@ -220,19 +230,22 @@ private:
         _snake.push_back(std::make_pair(_snake.back().first, _snake.back().second+1));
     }
 
-    constexpr void AppendTheSnake()
+    constexpr void AppendTheSnake(int x = 1)
     {
-        auto last = _snake.back();
-
-        switch (_currentDirection)
+        for (int n = 0; n < x; n++)
         {
-            case Direction::North: MoveNorth(last.second); break;
-            case Direction::East:  MoveEast(last.first); break;
-            case Direction::South: MoveSouth(last.second); break;
-            case Direction::West:  MoveWest(last.first); break;
-        }
+            auto last = _snake.back();
 
-        _snake.push_back(last);
+            switch (_currentDirection)
+            {
+                case Direction::North: MoveNorth(last.second); break;
+                case Direction::East:  MoveEast(last.first); break;
+                case Direction::South: MoveSouth(last.second); break;
+                case Direction::West:  MoveWest(last.first); break;
+            }
+
+            _snake.push_back(last);
+        }
     }
 
     constexpr void DrawTheSnake(bool dead = false)
@@ -248,6 +261,19 @@ private:
 
             auto& c = _snake.at(n);
             Draw(c.first, c.second, color);
+        }
+    }
+
+    constexpr void DrawTheObstacles()
+    {
+        for (auto& c : _goodObstacles)
+        {
+            Draw(c.first, c.second, olc::CYAN);
+        }
+
+        for (auto& c : _badObstacles)
+        {
+            Draw(c.first, c.second, olc::MAGENTA);
         }
     }
 
@@ -284,6 +310,27 @@ private:
                 throw GameOver("Collision");
             }
         }
+
+        for (auto& c : _badObstacles)
+        {
+            if ((c.first == head.first) && (c.second == head.second))
+            {
+                throw GameOver("Collision");
+            }
+        }
+
+        for (auto& c : _goodObstacles)
+        {
+            if ((c.first == head.first) && (c.second == head.second))
+            {
+                _goodObstacles.clear();
+                _badObstacles.clear();
+                AppendTheSnake(5);
+
+                CreateObstacle();
+                break;
+            }
+        }
     }
 
     constexpr void FollowTheSnakeHead()
@@ -302,6 +349,21 @@ private:
                 _snake[n] = last;
                 last = buffer;
             }
+        }
+    }
+
+    constexpr void CreateObstacle()
+    {
+        auto x = _lastTickMs % ScreenWidth();
+        auto y = _lastTickMs % ScreenHeight();
+
+        if (_lastTickMs % 3 == 0)
+        {
+            _goodObstacles.push_back(std::make_pair(x,y));
+        }
+        else
+        {
+            _badObstacles.push_back(std::make_pair(x,y));
         }
     }
 };
